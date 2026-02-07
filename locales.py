@@ -26,6 +26,9 @@ translations = {
         "fav_removed": "🗑️ O'chirildi.",
         "reminder_text": "Sizning sevimli jamoangiz \"{team}\" 1 soatdan keyin o'ynaydi. {home} vs {away} .",
         "goal_text": "GOAL !!!\n{home} {score} {away}\n{event}",
+        "game_start_text": "🏁 O'yin boshlandi!",
+        "2nd_half_text": "⚽ Ikkinchi bo'lim boshlandi!",
+        "ft_text": "🏁 O'yin yakunlandi!",
         "standings_btn": "📊 Turnir Jadvali",
         "standings_title": "📊 <b>{league} - Jadval</b>\n\n<code>{table}</code>"
     },
@@ -56,6 +59,9 @@ translations = {
         "fav_removed": "🗑️ Removed.",
         "reminder_text": "Your favourite club \"{team}\" will play after one hour. {home} vs {away} .",
         "goal_text": "GOAL !!!\n{home} {score} {away}\n{event}",
+        "game_start_text": "🏁 Match started!",
+        "2nd_half_text": "⚽ Second half started!",
+        "ft_text": "🏁 Match finished!",
         "standings_btn": "📊 Standings",
         "standings_title": "📊 <b>{league} - Standings</b>\n\n<code>{table}</code>"
     },
@@ -86,6 +92,9 @@ translations = {
         "fav_removed": "🗑️ Удалено.",
         "reminder_text": "Ваш любимый клуб \"{team}\" сыграет через час. {home} vs {away} .",
         "goal_text": "GOAL !!!\n{home} {score} {away}\n{event}",
+        "game_start_text": "🏁 Матч начался!",
+        "2nd_half_text": "⚽ Второй тайм начался!",
+        "ft_text": "🏁 Матч окончен!",
         "standings_btn": "📊 Таблица",
         "standings_title": "📊 <b>{league} - Таблица</b>\n\n<code>{table}</code>"
     }

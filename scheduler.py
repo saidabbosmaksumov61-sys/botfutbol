@@ -22,7 +22,7 @@ async def start_scheduler(bot: Bot):
             now_ts = datetime.now().timestamp()
             
             # 1. Check Live Scores (Every 10 seconds)
-            # await check_live_notifications(bot)
+            await check_live_notifications(bot)
             
             # 2. Check Match Reminders (Every 5 minutes is enough for "1 hour before" logic)
             if now_ts - last_reminder_check > 300:
@@ -36,60 +36,121 @@ async def start_scheduler(bot: Bot):
 
 async def check_live_notifications(bot: Bot):
     """
-    Check live matches for goals and notify ONLY users who favorited the playing teams.
+    Check matches for events (Start, Goal, HT, 2nd Half, FT) and notify fans.
     """
-    all_matches = api.get_all_matches()
-    live_matches = [m for m in all_matches if m['is_live']]
-    
-    if not live_matches:
+    # Get all team IDs that users have favorited
+    interested_teams = database.get_all_favorite_teams()
+    if not interested_teams:
         return
 
-    for m in live_matches:
+    # Pass interested teams to API to ensure we get their matches
+    all_matches = api.get_all_matches(interested_team_ids=interested_teams)
+    
+    # We care about matches that are Live or recently Finished (to catch FT event)
+    # Actually, we need to inspect all of them to catch 'Started' even if they just started.
+    
+    for m in all_matches:
         match_id = m['id']
-        score_str = m['score'] # e.g. "1 - 0"
+        home_name = m['home']
+        away_name = m['away']
+        score_str = m['score']
+        status_text = m['status_text'] # e.g. "HT", "FT", "60'"
+        is_live = m['is_live']
+        is_finished = m['is_finished']
+        match_time = m['match_time']
+
+        # Determine events to trigger
+        events_to_notify = []
+
+        # 1. Game Started
+        if is_live and not database.is_goal_notified(match_id, "start"):
+            events_to_notify.append(("start", "game_start_text"))
         
-        if score_str == "0 - 0" or score_str == "v" or not score_str:
+        # 2. Goals (Existing logic)
+        # Only check goals if game is live or just finished
+        if (is_live or is_finished) and score_str and score_str != "0 - 0" and score_str != "v":
+             if not database.is_goal_notified(match_id, score_str):
+                 # Store full event for processing
+                 events_to_notify.append(("goal", "goal_text"))
+
+        # 3. Half Time
+        if status_text == "HT" and not database.is_goal_notified(match_id, "ht"):
+            events_to_notify.append(("ht", "ht_text"))
+
+        # 4. Second Half Started
+        # Condition: Live, Time > 45, NOT HT, and HT was already notified (or imply it passed)
+        # Simple check: If time is like 46, 47... and we haven't notified 2nd_half
+        # But time format is string. safe check: if match is live, not HT, and we have recorded 'ht' event?
+        # Or just checking if minute > 45 is enough?
+        try:
+            minute = int(match_time) if match_time and match_time.isdigit() else 0
+            if is_live and minute > 45 and status_text != "HT" and not database.is_goal_notified(match_id, "2nd_half"):
+                 events_to_notify.append(("2nd_half", "2nd_half_text"))
+        except:
+            pass
+
+        # 5. Game Finished
+        if is_finished and not database.is_goal_notified(match_id, "ft"):
+            events_to_notify.append(("ft", "ft_text"))
+
+        if not events_to_notify:
             continue
+
+        # Prepare users to notify
+        home_fans = database.get_users_by_team(m['home_id'])
+        away_fans = database.get_users_by_team(m['away_id'])
+        target_users = {u['id']: u for u in home_fans + away_fans}.values()
+
+        if not target_users:
+            # Mark all pending events as notified to avoid re-checking loop
+            for event_type, _ in events_to_notify:
+                key = score_str if event_type == "goal" else event_type
+                database.mark_goal_notified(match_id, key)
+            continue
+
+        for event_type, lang_key in events_to_notify:
+            # For goal: key is score_str. For others: key is event_type literal.
+            db_key = score_str if event_type == "goal" else event_type
             
-        if not database.is_goal_notified(match_id, score_str):
-            # Goal detected!
-            print(f"Goal in match {match_id}: {m['home']} {score_str} {m['away']}")
-            
-            # Fetch events to get player name and minute
-            events = api.get_match_events(match_id)
-            last_event = events[-1] if events else "Goal!"
-            
-            # Target Users: Fans of Home OR Fans of Away
-            home_fans = database.get_users_by_team(m['home_id'])
-            away_fans = database.get_users_by_team(m['away_id'])
-            
-            # Combine unique users
-            target_users = {u['id']: u for u in home_fans + away_fans}.values()
-            
-            if not target_users:
-                # Mark as notified even if no one is watching to avoid re-processing
-                database.mark_goal_notified(match_id, score_str)
+            # Double check inside loop (though list unique)
+            if database.is_goal_notified(match_id, db_key):
                 continue
+                
+            # Extra data for message
+            extra = ""
+            if event_type == "goal":
+                 match_events = api.get_match_events(match_id)
+                 extra = match_events[-1] if match_events else "Goal!"
+
+            print(f"Notifying {event_type} for Match {match_id}")
 
             for user in target_users:
-                user_id = user['id']
                 lang = user['lang']
                 
-                # Format: GOAL !!! \n {home} {score} {away} \n {scorer} {minute}' \n\n [by : @noventis_bots]
-                text = get_text(lang, "goal_text").format(
-                    home=m['home'],
-                    score=score_str,
-                    away=m['away'],
-                    event=last_event
-                )
+                # Construct Message
+                # We need keys in locales.py: game_start_text, ht_text_notify, 2nd_half_text, ft_text
+                # Note: 'ht_text' might already exist for display in handlers. assume we need new ones or reuse.
+                # Construct text based on event
+                
+                msg = ""
+                if event_type == "goal":
+                     msg = get_text(lang, "goal_text").format(home=home_name, away=away_name, score=score_str, event=extra)
+                else:
+                     # Generic format for status updates
+                     # We can use a generic template or specific simple texts
+                     # Let's assume we add these keys to locales.py
+                     t_key = lang_key
+                     base_msg = get_text(lang, t_key)
+                     # Most messages need home/away teams
+                     msg = f"{base_msg}\n\n⚽ {home_name} {score_str} {away_name}"
                 
                 try:
-                    await bot.send_message(user_id, text, reply_markup=keyboards.get_notification_keyboard())
+                    await bot.send_message(user['id'], msg, reply_markup=keyboards.get_notification_keyboard())
                 except Exception as ex:
                     pass
             
-            # Mark as notified
-            database.mark_goal_notified(match_id, score_str)
+            # Mark as done
+            database.mark_goal_notified(match_id, db_key)
 
 async def check_reminders(bot: Bot):
     """

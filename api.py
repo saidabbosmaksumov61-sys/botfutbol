@@ -136,7 +136,7 @@ class FootballAPI:
                 goals.append(f"{player_name} ({time}')")
         return goals
 
-    def get_all_matches(self, date_str=None):
+    def get_all_matches(self, date_str=None, interested_team_ids=None):
         dates = []
         if not date_str:
             today = datetime.now()
@@ -149,16 +149,21 @@ class FootballAPI:
         else:
             dates = [date_str]
         
-        # Load Top 5 Team IDs
+        # Use set for faster lookup
+        interested_ids = set()
+        if interested_team_ids:
+            interested_ids = set(interested_team_ids)
+
+        # Load Top 5 Team IDs (optional fallback or merge)
         try:
             import json
             import os
             path = os.path.join(os.path.dirname(__file__), "top_5_teams.json")
             with open(path, "r") as f:
-                TOP_5_TEAM_IDS = set(json.load(f))
+                top_5 = set(json.load(f))
+                interested_ids.update(top_5)
         except:
-            print("Warning: Could not load top_5_teams.json")
-            TOP_5_TEAM_IDS = set()
+             pass
             
         all_matches = []
         for d in dates:
@@ -169,13 +174,20 @@ class FootballAPI:
                     league_name = league.get("name", "Unknown")
                     league_id = league.get("id")
                     
-                    # Check each match in every league (Champions League, Cup, etc included)
+                    # Check each match in every league
                     for m in league.get("matches", []):
                         home_id = m.get("home", {}).get("id")
                         away_id = m.get("away", {}).get("id")
                         
-                        # Filter: Match must involve at least one Top 5 Team
-                        if home_id not in TOP_5_TEAM_IDS and away_id not in TOP_5_TEAM_IDS:
+                        # Filter: Match must involve at least one Interested Team
+                        if not interested_ids:
+                             # If no interested teams specified (and file fail), maybe return all? 
+                             # Or better, return nothing to avoid spam/memory if logic depends on favorites.
+                             # But for generic usages, maybe we want all. 
+                             # For now, let's keep the filter behavior but with expanded list.
+                             pass
+                        
+                        if home_id not in interested_ids and away_id not in interested_ids:
                            continue
                             
                         status_obj = m.get("status", {})
