@@ -289,6 +289,8 @@ async def show_upcoming(callback: types.CallbackQuery):
 async def show_live(callback: types.CallbackQuery):
     await show_matches_generic(callback, "live", "live_title")
 
+@router.callback_query(F.data.startswith("history_"))
+async def show_history(callback: types.CallbackQuery):
     await show_matches_generic(callback, "past", "history_title")
 
 # --- ADMIN HANDLERS ---
