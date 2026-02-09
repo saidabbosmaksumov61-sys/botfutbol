@@ -47,8 +47,8 @@ def format_match_info(lang, home, away, score, status_text, is_live, is_finished
     elif match_time and match_time.isdigit():
         s_text = f"{match_time}'"
 
-    status_part = f" | {status_icon} <b>{s_text}</b>" if s_text else f" | {status_icon}"
-    return f"⚽ {home} {score} {away}\n{status_part}"
+    status_part = f"| {status_icon} <b>{s_text}</b>" if s_text else f"| {status_icon}"
+    return f"⚽ {home} {score} {away} {status_part}"
 
 async def check_live_notifications(bot: Bot):
     """

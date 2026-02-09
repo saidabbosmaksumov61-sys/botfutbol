@@ -188,11 +188,18 @@ async def toggle_favorite(callback: types.CallbackQuery):
         await callback.answer(get_text(lang, "fav_removed"))
         is_fav = False
     else:
-        # Add (Need team name, but callback only has ID. We might need to fetch or generic save)
-        # To be precise, let's fetch basic details or just save ID and 'Unknown' or update later
-        # Optimization: We don't strictly need name for logic, just ID. Name is for DB readable.
-        # We can fetch team name from API if we want, or just save "Team {id}"
-        database.set_favorite(user_id, team_id, f"Team_{team_id}")
+        # Fetch real team name
+        league_id = temp_state.get(user_id)
+        team_name = f"Team_{team_id}" # Fallback
+        
+        if league_id:
+            teams = api.get_teams(league_id)
+            for t in teams:
+                if t['id'] == team_id:
+                    team_name = t['name']
+                    break
+        
+        database.set_favorite(user_id, team_id, team_name)
         await callback.answer(get_text(lang, "fav_set"), show_alert=True)
         is_fav = True
         
